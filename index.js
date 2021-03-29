@@ -1,11 +1,15 @@
 
 require( 'dotenv' ).config();
 require( './config/database' );
+const Instagram = require('instagram-web-api')
+const FileCookieStore = require('tough-cookie-filestore2')
 const { createPost, updatePost } = require('./src/services/PostService')
 const { getRedditPost } = require('./src/services/RedditService')
+const { IG_USER: username, IG_PASSWORD: password, HASHTAGS: hashtags  } = require('./config/config').getConfig()
 
-/*const data2 = { ig_post_url:  'https://instagram.com/p/v6666666' }
-//const result = updatePost('6060c0cbc24c2a4258fb2f29', data2)*/
+const cookieStore = new FileCookieStore('./cookies.json')
+const client = new Instagram({ username, password, cookieStore })
+
 
 console.log( '✔ Bootstrapping Application' );
 getRedditPost().then(redditData => {
@@ -16,6 +20,20 @@ getRedditPost().then(redditData => {
         image_url: redditData.url,
     }
     createPost(data).then(newPost => {
-        console.log(newPost.image_url)
+        ;(async () => {
+            console.log('∙∙∙ Uploading posts')
+            const photo = newPost.image_url
+            const caption = ` 
+                Via reddit.com/${newPost.subreddit}
+                By reddit.com/u/${newPost.post_user}
+            `
+            const comment = hashtags
+            
+            await client.login()
+            const { media } = await client.uploadPhoto({ photo: photo, caption: caption, post: 'feed' })
+            await client.addComment({ mediaId: media.id, text: comment })
+            const ig_post_url = `https://www.instagram.com/p/${media.code}/`
+            updatePost(newPost._id, { ig_post_url }).then(r => console.log('✔ Post uploaded at ', new Date()))
+        })()
     })
 })
